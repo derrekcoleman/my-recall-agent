@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import type { Request, Response } from "express";
+import cors from "cors";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { RecallAgentToolkit } from "@recallnet/agent-toolkit/mcp";
 import { randomUUID } from "node:crypto";
@@ -52,6 +53,34 @@ const createToolkit = () => {
 
 const app = express();
 app.use(express.json());
+
+// Add CORS middleware with specific configuration
+app.use(
+  cors({
+    origin: [
+      "https://playground.ai.cloudflare.com",
+      "https://claude.ai",
+      "https://claude.app",
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Accept"],
+    credentials: true,
+  })
+);
+
+// Add a basic root endpoint for health check
+app.get("/", (req: Request, res: Response) => {
+  res.status(200).json({
+    status: "ok",
+    message: "Recall MCP Server is running",
+    endpoints: ["/mcp"],
+  });
+});
+
+// Add explicit handling for preflight requests
+app.options("/mcp", (req: Request, res: Response) => {
+  res.status(200).end();
+});
 
 app.post("/mcp", async (req: Request, res: Response) => {
   try {
