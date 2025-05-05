@@ -54,63 +54,64 @@ const createToolkit = () => {
 const app = express();
 app.use(express.json());
 
-// Add CORS middleware with specific configuration
+// Add CORS middleware
 app.use(
   cors({
-    origin: [
-      "https://playground.ai.cloudflare.com",
-      "https://claude.ai",
-      "https://claude.app",
-    ],
+    origin: "*",
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept"],
+    allowedHeaders: [
+      "Content-Type",
+      "Accept",
+      "Cache-Control",
+      "Connection",
+      "X-Requested-With",
+      "Authorization",
+    ],
     credentials: true,
+    exposedHeaders: ["Content-Type", "Cache-Control", "Connection"],
   })
 );
 
-// Add a basic root endpoint for health check
+// Health check endpoint
 app.get("/", (req: Request, res: Response) => {
-  res.status(200).json({
-    status: "ok",
-    message: "Recall MCP Server is running",
-    endpoints: ["/mcp"],
-  });
+  res
+    .status(200)
+    .json({ status: "ok", message: "Recall MCP Server is running" });
 });
 
-// Add explicit handling for preflight requests
+// Handle preflight requests
 app.options("/mcp", (req: Request, res: Response) => {
   res.status(200).end();
 });
 
 app.post("/mcp", async (req: Request, res: Response) => {
   try {
-    // Create a new toolkit and transport instance for each request
+    // Set SSE headers if client expects SSE
+    const acceptHeader = req.get("Accept") || "";
+    if (acceptHeader.includes("text/event-stream")) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+    }
+
     const toolkit = createToolkit();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
 
-    // Handle request cleanup
     res.on("close", () => {
       console.log("Request closed");
       transport.close();
-      // No explicit toolkit close method needed
     });
 
-    // Connect the toolkit to the transport
     await toolkit.connect(transport);
-
-    // Handle the MCP request
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error("Error handling MCP request:", error);
     if (!res.headersSent) {
       res.status(500).json({
         jsonrpc: "2.0",
-        error: {
-          code: -32603,
-          message: "Internal server error",
-        },
+        error: { code: -32603, message: "Internal server error" },
         id: null,
       });
     }
@@ -118,31 +119,34 @@ app.post("/mcp", async (req: Request, res: Response) => {
 });
 
 app.get("/mcp", async (req: Request, res: Response) => {
-  console.log("Received GET MCP request");
-  res.writeHead(405).end(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: {
-        code: -32000,
-        message: "Method not allowed.",
-      },
-      id: null,
-    })
-  );
-});
+  try {
+    // Set SSE headers for GET requests explicitly
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
 
-app.delete("/mcp", async (req: Request, res: Response) => {
-  console.log("Received DELETE MCP request");
-  res.writeHead(405).end(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: {
-        code: -32000,
-        message: "Method not allowed.",
-      },
-      id: null,
-    })
-  );
+    const toolkit = createToolkit();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+    });
+
+    res.on("close", () => {
+      console.log("SSE connection closed");
+      transport.close();
+    });
+
+    await toolkit.connect(transport);
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    console.error("Error handling GET MCP request:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal server error" },
+        id: null,
+      });
+    }
+  }
 });
 
 // For local development

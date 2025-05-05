@@ -10,19 +10,20 @@
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://playground.ai.cloudflare.com, https://claude.ai, https://claude.app"
-        },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
         {
           "key": "Access-Control-Allow-Methods",
           "value": "GET, POST, OPTIONS"
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Accept"
+          "value": "Content-Type, Accept, Cache-Control, Connection, X-Requested-With, Authorization"
         },
-        { "key": "Access-Control-Allow-Credentials", "value": "true" }
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        {
+          "key": "Access-Control-Expose-Headers",
+          "value": "Content-Type, Cache-Control, Connection"
+        }
       ]
     }
   ]
