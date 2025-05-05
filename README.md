@@ -52,7 +52,7 @@ You need to set up these environment variables:
 
 ```
 
-npm vercel
+vercel
 
 ```
 
@@ -66,7 +66,7 @@ npm vercel
 4. Deploy to production:
 
 ```
-npm vercel --prod
+vercel deploy --prod
 ```
 
 ### Using the Server
