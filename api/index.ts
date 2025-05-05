@@ -6,12 +6,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { RecallAgentToolkit } from "@recallnet/agent-toolkit/mcp";
 import { randomUUID } from "node:crypto";
 
-// Map to store sessions by session ID
 const sessions: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 const toolkits: { [sessionId: string]: RecallAgentToolkit } = {};
 const lastActivity: { [sessionId: string]: number } = {};
 
-// Create a toolkit instance
 const createToolkit = () => {
   const privateKey = process.env.RECALL_PRIVATE_KEY;
   if (!privateKey) {
@@ -32,7 +30,7 @@ const createToolkit = () => {
   });
 };
 
-// Create Express app
+// Initialize app and middleware for parsing JSON requests from external clients
 const app = express();
 app.use(express.json());
 app.use(
@@ -58,17 +56,14 @@ app.use(
   })
 );
 
-// Health check endpoint
 app.get("/", (req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
 
-// Handle preflight requests
 app.options("/mcp", (req: Request, res: Response) => {
   res.status(200).end();
 });
 
-// Handle POST requests for client-to-server communication
 app.post("/mcp", function (req: Request, res: Response) {
   (async function () {
     try {
@@ -88,16 +83,13 @@ app.post("/mcp", function (req: Request, res: Response) {
           sessionIdGenerator: () => newSessionId,
         });
 
-        // Create and connect toolkit
         const toolkit = createToolkit();
         await toolkit.connect(transport);
 
-        // Store session data
         sessions[newSessionId] = transport;
         toolkits[newSessionId] = toolkit;
         lastActivity[newSessionId] = Date.now();
 
-        // Set session ID in response header
         res.setHeader("Mcp-Session-Id", newSessionId);
 
         // Clean up when the transport is closed
@@ -121,7 +113,7 @@ app.post("/mcp", function (req: Request, res: Response) {
         });
       }
 
-      // Set appropriate content type based on Accept header
+      // Check for SSE preference, fallback to JSON
       const acceptHeader = req.get("Accept") || "";
       if (acceptHeader.includes("text/event-stream")) {
         res.setHeader("Content-Type", "text/event-stream");
@@ -131,7 +123,6 @@ app.post("/mcp", function (req: Request, res: Response) {
         res.setHeader("Content-Type", "application/json");
       }
 
-      // Handle the request
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
       console.error("Error in POST handler:", error);
@@ -163,6 +154,7 @@ const handleSessionRequest = async (req: Request, res: Response) => {
   // For DELETE requests, close the transport and remove the session
   if (req.method === "DELETE") {
     transport.close();
+    // A little defensive redundancy with transport.onclose() cleanup
     delete sessions[sessionId];
     delete toolkits[sessionId];
     delete lastActivity[sessionId];
@@ -189,7 +181,6 @@ const handleSessionRequest = async (req: Request, res: Response) => {
     res.setHeader("Connection", "keep-alive");
   }
 
-  // Handle the request
   await transport.handleRequest(req, res);
 };
 
